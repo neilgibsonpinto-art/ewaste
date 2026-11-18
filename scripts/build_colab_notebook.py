@@ -1,0 +1,248 @@
+import json
+from pathlib import Path
+
+notebook = {
+    "nbformat": 4,
+    "nbformat_minor": 0,
+    "metadata": {
+        "colab": {
+            "provenance": [],
+            "toc_visible": True
+        },
+        "kernelspec": {
+            "name": "python3",
+            "display_name": "Python 3"
+        },
+        "language_info": {
+            "name": "python"
+        },
+        "accelerator": "GPU"
+    },
+    "cells": [
+        {
+            "cell_type": "markdown",
+            "metadata": {},
+            "source": [
+                "# ♻️ Smart E-Waste Segregation System: YOLOv8 Training & Inference\n",
+                "**Project:** Conveyor-Based Automated Electronic Waste Segregation using YOLOv8 & 6-DOF Robotic Arm  \n",
+                "**GitHub Repository:** [neilgibsonpinto-art/ewaste](https://github.com/neilgibsonpinto-art/ewaste)  \n",
+                "**Target Classes:** `0: pcb`, `1: battery`, `2: display`  \n",
+                "\n",
+                "[![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/neilgibsonpinto-art/ewaste/blob/main/Smart_EWaste_Colab.ipynb)"
+            ]
+        },
+        {
+            "cell_type": "markdown",
+            "metadata": {},
+            "source": [
+                "## 1. Setup Environment & Clone Project Repository\n",
+                "Clone the complete project repository from GitHub and install `ultralytics`, `roboflow`, and dependencies."
+            ]
+        },
+        {
+            "cell_type": "code",
+            "metadata": {},
+            "execution_count": None,
+            "outputs": [],
+            "source": [
+                "# Clone the repository from GitHub\n",
+                "!git clone https://github.com/neilgibsonpinto-art/ewaste.git\n",
+                "%cd ewaste\n",
+                "\n",
+                "# Install YOLOv8 and computer vision packages\n",
+                "!pip install -q ultralytics roboflow opencv-python matplotlib Pillow\n",
+                "\n",
+                "import torch\n",
+                "import ultralytics\n",
+                "print('PyTorch Version:', torch.__version__)\n",
+                "print('Ultralytics YOLO Version:', ultralytics.__version__)\n",
+                "print('GPU Available:', torch.cuda.is_available())"
+            ]
+        },
+        {
+            "cell_type": "markdown",
+            "metadata": {},
+            "source": [
+                "## 2. Dataset Inspection & Preview\n",
+                "Inspect `data.yaml` and visualize training samples with bounding boxes."
+            ]
+        },
+        {
+            "cell_type": "code",
+            "metadata": {},
+            "execution_count": None,
+            "outputs": [],
+            "source": [
+                "import yaml\n",
+                "import glob\n",
+                "from pathlib import Path\n",
+                "from PIL import Image\n",
+                "import matplotlib.pyplot as plt\n",
+                "\n",
+                "# Read and configure data.yaml for Google Colab\n",
+                "with open('dataset/data.yaml', 'r') as f:\n",
+                "    data_config = yaml.safe_load(f)\n",
+                "\n",
+                "data_config['path'] = '/content/ewaste/dataset'\n",
+                "with open('dataset/data.yaml', 'w') as f:\n",
+                "    yaml.dump(data_config, f)\n",
+                "\n",
+                "print('Dataset Configuration:')\n",
+                "print(yaml.dump(data_config))\n",
+                "\n",
+                "# Preview 4 random training images\n",
+                "train_images = glob.glob('dataset/images/train/*.jpg')[:4]\n",
+                "fig, axes = plt.subplots(1, 4, figsize=(16, 4))\n",
+                "for ax, img_p in zip(axes, train_images):\n",
+                "    ax.imshow(Image.open(img_p))\n",
+                "    ax.set_title(Path(img_p).stem)\n",
+                "    ax.axis('off')\n",
+                "plt.tight_layout()\n",
+                "plt.show()"
+            ]
+        },
+        {
+            "cell_type": "markdown",
+            "metadata": {},
+            "source": [
+                "## 3. Train Lightweight YOLOv8-Nano Model\n",
+                "Train the model for 30 epochs with free GPU acceleration on Google Colab."
+            ]
+        },
+        {
+            "cell_type": "code",
+            "metadata": {},
+            "execution_count": None,
+            "outputs": [],
+            "source": [
+                "from ultralytics import YOLO\n",
+                "\n",
+                "# Load pre-trained nano weights\n",
+                "model = YOLO('yolov8n.pt')\n",
+                "\n",
+                "# Train on E-Waste dataset\n",
+                "results = model.train(\n",
+                "    data='dataset/data.yaml',\n",
+                "    epochs=30,\n",
+                "    imgsz=640,\n",
+                "    batch=16,\n",
+                "    device=0 if torch.cuda.is_available() else 'cpu',\n",
+                "    project='runs/train',\n",
+                "    name='ewaste_colab_yolov8n',\n",
+                "    plots=True,\n",
+                "    verbose=True\n",
+                ")\n",
+                "\n",
+                "print('Training Complete!')\n",
+                "print('Best weights saved at: runs/train/ewaste_colab_yolov8n/weights/best.pt')"
+            ]
+        },
+        {
+            "cell_type": "markdown",
+            "metadata": {},
+            "source": [
+                "## 4. Visualize Model Performance Curves\n",
+                "Display loss curves, confusion matrix, and Precision-Recall (PR) curves."
+            ]
+        },
+        {
+            "cell_type": "code",
+            "metadata": {},
+            "execution_count": None,
+            "outputs": [],
+            "source": [
+                "from IPython.display import Image as IPyImage, display\n",
+                "\n",
+                "print('--- Training Loss & Validation Results ---')\n",
+                "display(IPyImage('runs/train/ewaste_colab_yolov8n/results.png'))\n",
+                "\n",
+                "print('--- Confusion Matrix ---')\n",
+                "display(IPyImage('runs/train/ewaste_colab_yolov8n/confusion_matrix.png'))\n",
+                "\n",
+                "print('--- Precision-Recall Curve ---')\n",
+                "display(IPyImage('runs/train/ewaste_colab_yolov8n/BoxPR_curve.png'))"
+            ]
+        },
+        {
+            "cell_type": "markdown",
+            "metadata": {},
+            "source": [
+                "## 5. Test Inference on Test Images with Live Counter\n",
+                "Run detection on validation images, count sorted parts, and visualize predictions."
+            ]
+        },
+        {
+            "cell_type": "code",
+            "metadata": {},
+            "execution_count": None,
+            "outputs": [],
+            "source": [
+                "import glob\n",
+                "from collections import Counter\n",
+                "\n",
+                "# Load the trained model\n",
+                "trained_model = YOLO('runs/train/ewaste_colab_yolov8n/weights/best.pt')\n",
+                "\n",
+                "# Run inference on validation images\n",
+                "val_images = glob.glob('dataset/images/val/*.jpg')[:6]\n",
+                "counter = Counter()\n",
+                "\n",
+                "fig, axes = plt.subplots(2, 3, figsize=(15, 10))\n",
+                "for ax, img_p in zip(axes.flatten(), val_images):\n",
+                "    res = trained_model.predict(img_p, conf=0.50, verbose=False)[0]\n",
+                "    \n",
+                "    # Count classes detected\n",
+                "    for box in res.boxes:\n",
+                "        cls_name = res.names[int(box.cls[0])]\n",
+                "        counter[cls_name] += 1\n",
+                "        \n",
+                "    # Plot annotated image (RGB)\n",
+                "    annotated_rgb = res.plot()[:, :, ::-1]\n",
+                "    ax.imshow(annotated_rgb)\n",
+                "    ax.set_title(Path(img_p).stem)\n",
+                "    ax.axis('off')\n",
+                "\n",
+                "plt.tight_layout()\n",
+                "plt.show()\n",
+                "\n",
+                "print('=' * 40)\n",
+                "print('  SEGREGATION TALLY SUMMARY')\n",
+                "print('=' * 40)\n",
+                "for k, v in counter.items():\n",
+                "    print(f'  {k.upper()}: {v} item(s)')\n",
+                "print(f'  TOTAL PROCESSED: {sum(counter.values())}')\n",
+                "print('=' * 40)"
+            ]
+        },
+        {
+            "cell_type": "markdown",
+            "metadata": {},
+            "source": [
+                "## 6. Export Model for Edge Devices (Raspberry Pi 5 / Laptop)\n",
+                "Export weights to ONNX format for ultra-fast edge deployment, and download the `.pt` file."
+            ]
+        },
+        {
+            "cell_type": "code",
+            "metadata": {},
+            "execution_count": None,
+            "outputs": [],
+            "source": [
+                "from google.colab import files\n",
+                "\n",
+                "# Export to ONNX\n",
+                "!yolo export model=runs/train/ewaste_colab_yolov8n/weights/best.pt format=onnx imgsz=640\n",
+                "\n",
+                "# Download best.pt directly to your computer\n",
+                "files.download('runs/train/ewaste_colab_yolov8n/weights/best.pt')\n",
+                "print('Model weights ready for edge deployment!')"
+            ]
+        }
+    ]
+}
+
+out_path = Path(r"c:\Users\Neil Gibson Pinto\Documents\antigravity\magical-volta\Smart_EWaste_Colab.ipynb")
+with open(out_path, "w", encoding="utf-8") as f:
+    json.dump(notebook, f, indent=2)
+
+print(f"Successfully generated: {out_path}")
