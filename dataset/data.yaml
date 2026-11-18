@@ -1,0 +1,8 @@
+path: c:/Users/Neil Gibson Pinto/Documents/antigravity/magical-volta/dataset
+train: images/train
+val: images/val
+
+names:
+  0: pcb
+  1: battery
+  2: display

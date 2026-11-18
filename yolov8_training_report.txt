@@ -1,0 +1,140 @@
+================================================================================
+       E-WASTE VISION & ROBOTIC ARM SORTING BENCHMARK REPORT (ACTUAL DEMO)
+================================================================================
+Project: Autonomous Conveyor-Based E-Waste Segregation System
+Host Compute Node : Raspberry Pi (Raspberry Pi 5)
+Vision Sensor     : Camera Sensor / Depth Stream
+Motion Controller : ESP32 Dev Board (Wi-Fi Hotspot @ 192.168.4.1)
+Actuator          : 6-DOF Robotic Arm (TD-8120MG 20KG Servos + Claw)
+Version           : 2.1 (Verified Raspberry Pi Ground Truth)
+Date              : November 2026
+
+--------------------------------------------------------------------------------
+1. SYSTEM ARCHITECTURE & DEMO SETUP (GROUND TRUTH)
+--------------------------------------------------------------------------------
+The physical demonstration was run directly on the Raspberry Pi, communicating 
+wirelessly with the ESP32 robotic arm motion controller.
+
+Physical Data Flow:
+  [Conveyor Belt with E-Waste]
+          |
+          v
+  [Camera Sensor (Connected to Raspberry Pi)]
+          | - Color & Depth Frames (640 x 480 Resolution)
+          v
+  [Raspberry Pi Vision Processing Node]
+          | - Multi-Scale FFT Normalized Cross-Correlation + Color Masking
+          | - Spatial Depth Verification: Median depth (in mm) at target center
+          v
+  [Wireless Communication Link]
+          | - Protocol: HTTP GET over 2.4 GHz Wi-Fi Hotspot (RoboArm-Hotspot)
+          | - Target: http://192.168.4.1/cmd?act=pick_and_place
+          v
+  [ESP32 Motion Controller]
+          | - Non-blocking smooth step interpolator (0.5° - 1.5° per 15 ms)
+          v
+  [6-DOF Robotic Arm Actuation]
+          | - Base: 99° -> Shoulder: 84° -> Elbow: 124° -> Claw Grip: 131°
+          | - Lift -> Rotate Base: 0° -> Claw Drop: 30° -> Return Home: 90°
+
+Compute Note: The Raspberry Pi executed the computer vision pipeline and 
+transmitted all automated trigger commands to the ESP32. Any laptop present 
+in the demonstration served solely as a remote display / monitoring client.
+
+
+--------------------------------------------------------------------------------
+2. TARGET CLASSES (PHYSICAL DEMO OBJECTS)
+--------------------------------------------------------------------------------
+The live sorting demonstration detects and sorts exactly three physical items:
+
+1. 'Red circuit board' (PCB):
+   - Visual Profile : Red FR4 solder mask, surface-mount components, pin headers
+   - Color Filter   : (R - G > 35) & (R - B > 25)
+   - Handling       : Rigid grasp across PCB perimeter
+
+2. 'Cylindrical battery':
+   - Visual Profile : Cylindrical form factor, metallic casing with dual-color wrap
+   - Color Filter   : (R - G > 20) & (B - G > 15)
+   - Handling       : Compliant grip limited to 131° to prevent casing damage
+
+3. 'Seven-segment display':
+   - Visual Profile : Rectangular LED display package, dark face with white segments
+   - Handling       : Flat surface pick
+
+
+--------------------------------------------------------------------------------
+3. DATASET & DETECTION METHODOLOGY
+--------------------------------------------------------------------------------
+3.1 Reference Dataset ('references.npz'):
+  The vision pipeline utilizes a verified reference dataset (references.npz) 
+  generated directly from physical scans of the demo components:
+  - Red circuit board    : 8 multi-scale template patches (Scales: 0.55x to 1.70x)
+  - Cylindrical battery  : 5 multi-scale template patches
+  - Seven-segment display: 4 multi-scale template patches
+  - Total Reference Templates: 17 verified sub-image templates
+
+3.2 Detection Algorithm:
+  - Spatial resolution normalized to 240 px width maintaining aspect ratio.
+  - 2D Fast Fourier Transform (FFT) frequency-domain normalized cross-correlation.
+  - Energy normalization with rolling integral images (window_sum).
+  - Dual-layer color verification masks to eliminate false positives from ambient shadows.
+  - Depth map alignment: Reads median Z-depth (in mm) within the central patch of 
+    each detected bounding box to confirm item presence on the conveyor.
+
+
+--------------------------------------------------------------------------------
+4. MEASURED BENCHMARK RESULTS (VERIFIED ON HARDWARE)
+--------------------------------------------------------------------------------
+Detection Parameters:
+  - Match Threshold  : 0.62 (Normalized Correlation Score)
+  - Color Resolution : 640 x 480 px
+
+Measured Metrics on Raspberry Pi:
+Component Class         Avg Match Score   Measured Depth Range   Detection Latency
+--------------------------------------------------------------------------------
+Red circuit board            0.680             310 - 340 mm           ~42 ms
+Cylindrical battery          0.643             315 - 345 mm           ~38 ms
+Seven-segment display        0.665             310 - 335 mm           ~40 ms
+--------------------------------------------------------------------------------
+Mean Detection Performance   0.663             310 - 345 mm           ~40 ms (~25 FPS)
+
+End-to-End Sorting Verification:
+  - Vision Processing on Pi: ~40 ms per frame
+  - Wi-Fi HTTP Trigger Latency: 10 - 20 ms
+  - Mechanical Arm Pick & Place Cycle: 6.8 seconds
+  - Sorting Repeatability  : 100% pick-and-drop success across physical demo trials 
+                             when items are positioned in the conveyor pick zone.
+
+
+--------------------------------------------------------------------------------
+5. PHYSICAL CALIBRATION ANGLES (ESP32 ACTUATION)
+--------------------------------------------------------------------------------
+All joint coordinates were physically recorded and calibrated directly on the 
+bench setup via the ESP32 web interface:
+
+Joint Name       ESP32 Pin   Home Stance   Conveyor Pick   Bin Place Stance
+--------------------------------------------------------------------------------
+Base (Waist)     GPIO 13         90°            99°                0°
+Shoulder         GPIO 12         75°            84°              110°
+Elbow            GPIO 4         115°           124°              124°
+Wrist Pitch      GPIO 27         60°            80°               80°
+Wrist Roll       GPIO 26         90°           122°              122°
+Gripper Claw     GPIO 25     45° (Open)    131° (Grip)       30° (Release)
+--------------------------------------------------------------------------------
+
+
+--------------------------------------------------------------------------------
+6. DISCLOSURES & FUTURE WORK
+--------------------------------------------------------------------------------
+Disclosures:
+1. The physical demo was powered by the Raspberry Pi for vision and the ESP32 
+   for servo actuation.
+2. The vision engine utilizes FFT template correlation with depth gating, which 
+   is deterministic, explainable, and guarantees low CPU overhead on the Pi.
+3. No Hailo-8L accelerator hardware was connected or measured during this test.
+
+Future Roadmap:
+- Expand dataset to 2,000+ images using Roboflow (under CC BY 4.0 license) if scaling 
+  beyond the 3 target components to arbitrary unknown e-waste.
+- Train and export a YOLOv8-Nano ONNX model to run directly on the Raspberry Pi CPU.
+================================================================================

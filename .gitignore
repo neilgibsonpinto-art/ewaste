@@ -1,0 +1,27 @@
+# Virtual Environment
+ewaste_env/
+venv/
+env/
+.venv/
+
+# Python cache
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.pytest_cache/
+
+# Ultralytics & Model Checkpoints
+*.tmp
+*.log
+runs/
+
+# Large Raw PDFs / Scans
+*.pdf
+dataset/raw/
+
+# IDE / OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
