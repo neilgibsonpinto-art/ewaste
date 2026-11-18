@@ -35,8 +35,8 @@ notebook = {
             "cell_type": "markdown",
             "metadata": {},
             "source": [
-                "## 1. Setup Environment & Clone Project Repository (Foolproof)\n",
-                "Resets the working directory cleanly to avoid `FileExistsError` or `No such file or directory: ewaste`, clones the latest code, and installs YOLOv8."
+                "## 1. Setup Environment & Clone Project Repository\n",
+                "Clones the repository and installs YOLOv8 and computer vision packages."
             ]
         },
         {
@@ -46,18 +46,13 @@ notebook = {
             "outputs": [],
             "source": [
                 "import os\n",
-                "\n",
-                "# Always reset to root /content directory\n",
                 "%cd /content\n",
-                "\n",
-                "# Clean existing clone if re-running\n",
                 "if os.path.exists('/content/ewaste'):\n",
                 "    !rm -rf /content/ewaste\n",
                 "\n",
                 "!git clone https://github.com/neilgibsonpinto-art/ewaste.git\n",
                 "%cd /content/ewaste\n",
                 "\n",
-                "# Install packages\n",
                 "!pip install -q ultralytics roboflow opencv-python matplotlib Pillow\n",
                 "\n",
                 "import torch\n",
@@ -72,7 +67,7 @@ notebook = {
             "metadata": {},
             "source": [
                 "## 2. Dataset Inspection & Preview\n",
-                "Configures `data.yaml` with absolute Colab paths and visualizes sample images."
+                "Verifies dataset annotations and visualizes sample images."
             ]
         },
         {
@@ -87,7 +82,6 @@ notebook = {
                 "from PIL import Image\n",
                 "import matplotlib.pyplot as plt\n",
                 "\n",
-                "# Configure data.yaml with absolute Colab path\n",
                 "data_yaml_path = Path('/content/ewaste/dataset/data.yaml')\n",
                 "with open(data_yaml_path, 'r') as f:\n",
                 "    data_config = yaml.safe_load(f)\n",
@@ -102,11 +96,8 @@ notebook = {
                 "print('Dataset YAML Verified:')\n",
                 "print(yaml.dump(data_config))\n",
                 "\n",
-                "# Preview training images\n",
                 "train_images = glob.glob('/content/ewaste/dataset/images/train/*.jpg')[:4]\n",
                 "fig, axes = plt.subplots(1, len(train_images), figsize=(16, 4))\n",
-                "if len(train_images) == 1:\n",
-                "    axes = [axes]\n",
                 "for ax, img_p in zip(axes, train_images):\n",
                 "    ax.imshow(Image.open(img_p))\n",
                 "    ax.set_title(Path(img_p).stem)\n",
@@ -120,7 +111,7 @@ notebook = {
             "metadata": {},
             "source": [
                 "## 3. Train Lightweight YOLOv8-Nano Model\n",
-                "Trains on the 92 e-waste component images using the T4 GPU."
+                "Trains on the 92 e-waste component images using the GPU."
             ]
         },
         {
@@ -132,11 +123,9 @@ notebook = {
                 "import os\n",
                 "from ultralytics import YOLO\n",
                 "\n",
-                "# Use local weights if present or auto-download\n",
                 "weights_source = '/content/ewaste/yolov8n.pt' if os.path.exists('/content/ewaste/yolov8n.pt') else 'yolov8n.pt'\n",
                 "model = YOLO(weights_source)\n",
                 "\n",
-                "# Train model\n",
                 "results = model.train(\n",
                 "    data='/content/ewaste/dataset/data.yaml',\n",
                 "    epochs=25,\n",
@@ -148,7 +137,6 @@ notebook = {
                 "    plots=True,\n",
                 "    verbose=True\n",
                 ")\n",
-                "\n",
                 "print('Training Complete!')"
             ]
         },
@@ -156,7 +144,7 @@ notebook = {
             "cell_type": "markdown",
             "metadata": {},
             "source": [
-                "## 4. Visualize Model Performance Curves\n",
+                "## 4. Visualize Training Performance Curves\n",
                 "Displays training loss, confusion matrix, and Precision-Recall curves."
             ]
         },
@@ -181,8 +169,8 @@ notebook = {
             "cell_type": "markdown",
             "metadata": {},
             "source": [
-                "## 5. Test Inference with Object Counter\n",
-                "Runs predictions on test images and displays the segregation tally."
+                "## 5. RUN DETECTION: Batch Test on Dataset with Live Counter\n",
+                "Runs predictions on test images, counts each detected item, and displays the summary tally."
             ]
         },
         {
@@ -192,20 +180,27 @@ notebook = {
             "outputs": [],
             "source": [
                 "import glob\n",
+                "import os\n",
                 "from collections import Counter\n",
                 "from pathlib import Path\n",
                 "from PIL import Image\n",
                 "import matplotlib.pyplot as plt\n",
+                "from ultralytics import YOLO\n",
                 "\n",
-                "# Load best weights\n",
-                "trained_model = YOLO('/content/ewaste/runs/train/ewaste_colab_yolov8n/weights/best.pt')\n",
+                "# Pick newly trained weights or pre-shipped repository weights\n",
+                "trained_path = '/content/ewaste/runs/train/ewaste_colab_yolov8n/weights/best.pt'\n",
+                "if not os.path.exists(trained_path):\n",
+                "    trained_path = '/content/ewaste/models/ewaste_yolov8n/weights/best.pt'\n",
+                "\n",
+                "print('Loading detection weights from:', trained_path)\n",
+                "detector = YOLO(trained_path)\n",
                 "\n",
                 "val_images = glob.glob('/content/ewaste/dataset/images/val/*.jpg')[:6]\n",
                 "counter = Counter()\n",
                 "\n",
                 "fig, axes = plt.subplots(2, 3, figsize=(15, 10))\n",
                 "for ax, img_p in zip(axes.flatten(), val_images):\n",
-                "    res = trained_model.predict(img_p, conf=0.45, verbose=False)[0]\n",
+                "    res = detector.predict(img_p, conf=0.45, verbose=False)[0]\n",
                 "    for box in res.boxes:\n",
                 "        cls_name = res.names[int(box.cls[0])]\n",
                 "        counter[cls_name] += 1\n",
@@ -229,8 +224,8 @@ notebook = {
             "cell_type": "markdown",
             "metadata": {},
             "source": [
-                "## 6. Export Model for Edge Devices (Download Weights)\n",
-                "Downloads `best.pt` directly to your laptop for edge deployment."
+                "## 6. RUN DETECTION: Upload Any Photo from Your Computer\n",
+                "Upload a photo of your PCB, battery, or display to detect and count it instantly!"
             ]
         },
         {
@@ -240,8 +235,145 @@ notebook = {
             "outputs": [],
             "source": [
                 "from google.colab import files\n",
-                "files.download('/content/ewaste/runs/train/ewaste_colab_yolov8n/weights/best.pt')\n",
-                "print('Downloaded best.pt to your computer!')"
+                "from PIL import Image\n",
+                "import matplotlib.pyplot as plt\n",
+                "from ultralytics import YOLO\n",
+                "import os\n",
+                "\n",
+                "print('Click \"Choose Files\" below to upload a photo of your e-waste:')\n",
+                "uploaded = files.upload()\n",
+                "\n",
+                "if uploaded:\n",
+                "    trained_path = '/content/ewaste/runs/train/ewaste_colab_yolov8n/weights/best.pt'\n",
+                "    if not os.path.exists(trained_path):\n",
+                "        trained_path = '/content/ewaste/models/ewaste_yolov8n/weights/best.pt'\n",
+                "    \n",
+                "    detector = YOLO(trained_path)\n",
+                "    for fn in uploaded.keys():\n",
+                "        print(f'\\nRunning detection on: {fn}')\n",
+                "        res = detector.predict(fn, conf=0.45)[0]\n",
+                "        \n",
+                "        # Display result\n",
+                "        plt.figure(figsize=(8, 6))\n",
+                "        plt.imshow(res.plot()[:, :, ::-1])\n",
+                "        plt.title(f'Detection Result: {fn}')\n",
+                "        plt.axis('off')\n",
+                "        plt.show()\n",
+                "        \n",
+                "        print('Detected Objects:')\n",
+                "        for box in res.boxes:\n",
+                "            print(f\"  - {res.names[int(box.cls[0])].upper()} ({float(box.conf[0]):.2f} confidence)\")"
+            ]
+        },
+        {
+            "cell_type": "markdown",
+            "metadata": {},
+            "source": [
+                "## 7. RUN DETECTION: Live Laptop Webcam Inside Colab\n",
+                "Captures a live frame from your laptop webcam directly in Google Colab and runs detection on it!"
+            ]
+        },
+        {
+            "cell_type": "code",
+            "metadata": {},
+            "execution_count": None,
+            "outputs": [],
+            "source": [
+                "from IPython.display import display, Javascript\n",
+                "from google.colab.output import eval_js\n",
+                "from base64 import b64decode\n",
+                "import cv2\n",
+                "import numpy as np\n",
+                "from PIL import Image\n",
+                "import matplotlib.pyplot as plt\n",
+                "from ultralytics import YOLO\n",
+                "import os\n",
+                "\n",
+                "def take_photo(filename='webcam_capture.jpg', quality=0.8):\n",
+                "    js = Javascript('''\n",
+                "        async function takePhoto(quality) {\n",
+                "            const div = document.createElement('div');\n",
+                "            const capture = document.createElement('button');\n",
+                "            capture.textContent = 'Capture Frame';\n",
+                "            capture.style.cssText = 'padding: 10px 18px; font-weight: bold; background: #0284c7; color: white; border: none; border-radius: 8px; cursor: pointer;';\n",
+                "            div.appendChild(capture);\n",
+                "\n",
+                "            const video = document.createElement('video');\n",
+                "            video.style.display = 'block';\n",
+                "            video.style.marginTop = '10px';\n",
+                "            const stream = await navigator.mediaDevices.getUserMedia({video: true});\n",
+                "\n",
+                "            document.body.appendChild(div);\n",
+                "            div.appendChild(video);\n",
+                "            video.srcObject = stream;\n",
+                "            await video.play();\n",
+                "\n",
+                "            google.colab.output.setIframeHeight(document.documentElement.scrollHeight, true);\n",
+                "\n",
+                "            await new Promise((resolve) => capture.onclick = resolve);\n",
+                "\n",
+                "            const canvas = document.createElement('canvas');\n",
+                "            canvas.width = video.videoWidth;\n",
+                "            canvas.height = video.videoHeight;\n",
+                "            canvas.getContext('2d').drawImage(video, 0, 0);\n",
+                "            stream.getVideoTracks()[0].stop();\n",
+                "            div.remove();\n",
+                "            return canvas.toDataURL('image/jpeg', quality);\n",
+                "        }\n",
+                "    ''')\n",
+                "    display(js)\n",
+                "    data = eval_js('takePhoto({})'.format(quality))\n",
+                "    binary = b64decode(data.split(',')[1])\n",
+                "    with open(filename, 'wb') as f:\n",
+                "        f.write(binary)\n",
+                "    return filename\n",
+                "\n",
+                "print('Click \"Capture Frame\" below to snap a picture of your component:')\n",
+                "try:\n",
+                "    photo = take_photo()\n",
+                "    trained_path = '/content/ewaste/runs/train/ewaste_colab_yolov8n/weights/best.pt'\n",
+                "    if not os.path.exists(trained_path):\n",
+                "        trained_path = '/content/ewaste/models/ewaste_yolov8n/weights/best.pt'\n",
+                "    \n",
+                "    detector = YOLO(trained_path)\n",
+                "    res = detector.predict(photo, conf=0.45)[0]\n",
+                "    \n",
+                "    plt.figure(figsize=(8, 6))\n",
+                "    plt.imshow(res.plot()[:, :, ::-1])\n",
+                "    plt.title('Webcam Detection Result')\n",
+                "    plt.axis('off')\n",
+                "    plt.show()\n",
+                "    \n",
+                "    print('Detected Objects:')\n",
+                "    for box in res.boxes:\n",
+                "        print(f\"  - {res.names[int(box.cls[0])].upper()} ({float(box.conf[0]):.2f} confidence)\")\n",
+                "except Exception as err:\n",
+                "    print('Webcam capture error or cancelled:', err)"
+            ]
+        },
+        {
+            "cell_type": "markdown",
+            "metadata": {},
+            "source": [
+                "## 8. Export Model for Edge Devices (Download Weights)\n",
+                "Downloads `best.pt` directly to your laptop for edge deployment on your Raspberry Pi or ESP32 arm."
+            ]
+        },
+        {
+            "cell_type": "code",
+            "metadata": {},
+            "execution_count": None,
+            "outputs": [],
+            "source": [
+                "from google.colab import files\n",
+                "import os\n",
+                "\n",
+                "target_file = '/content/ewaste/runs/train/ewaste_colab_yolov8n/weights/best.pt'\n",
+                "if not os.path.exists(target_file):\n",
+                "    target_file = '/content/ewaste/models/ewaste_yolov8n/weights/best.pt'\n",
+                "\n",
+                "files.download(target_file)\n",
+                "print('Downloaded weights to your computer!')"
             ]
         }
     ]
@@ -251,4 +383,4 @@ out_path = Path(r"c:\Users\Neil Gibson Pinto\Documents\antigravity\magical-volta
 with open(out_path, "w", encoding="utf-8") as f:
     json.dump(notebook, f, indent=2)
 
-print(f"Updated: {out_path}")
+print(f"Updated Colab notebook: {out_path}")
